@@ -1,0 +1,37 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+jupyter = "*"
+pandas = "*"
+numpy = "*"
+fastapi = "*"
+uvicorn = "*"
+joblib = "*"
+nltk = "*"
+matplotlib = "*"
+seaborn = "*"
+wordcloud = "*"
+plotly = "*"
+scikit-learn = "*"
+textblob = "*"
+pytest = "*"
+pyenchant = "*"
+langdetect = "*"
+imdbpy = "*"
+vadersentiment = "*"
+gensim = "*"
+spacy = "*"
+ace-tools = "*"
+faiss-cpu = "*"
+torch = "*"
+streamlit = "*"
+httpx = "*"
+python-multipart = "*"
+
+[dev-packages]
+
+[requires]
+python_version = "3.10"
