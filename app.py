@@ -4,7 +4,7 @@ import pandas as pd
 from io import StringIO
 
 # URL de l'API FastAPI
-api_url = "http://127.0.0.1:8001"  # Modifiez si nécessaire
+api_url = "https://sentimentanalysisgi-esbtjdewrdqcck76ovdbuf.streamlit.app/"  # Modifiez si nécessaire
 
 st.title("Analyse de Sentiment")
 
