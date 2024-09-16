@@ -1,73 +1,42 @@
 import streamlit as st
 import requests
 import pandas as pd
+from io import StringIO
 
 # URL de l'API FastAPI
-api_url = "http://127.0.0.1:8001"  # Assurez-vous que c'est l'URL correcte
+api_url = "http://127.0.0.1:8001"  # Modifiez si nécessaire
 
-# Configuration des styles Streamlit
-st.set_page_config(page_title="Prédiction de Sentiment", layout="wide")
+st.title("Analyse de Sentiment")
 
-# Définir le style personnalisé
-def set_bg_hack():
-    st.markdown("""
-        <style>
-        .stApp {
-            background-color: black;
-            color: white;
-        }
-        .stButton>button {
-            background-color: grey;
-            color: black;
-        }
-        </style>
-        """, unsafe_allow_html=True)
+# Upload du fichier TSV
+file = st.file_uploader("Téléchargez un fichier TSV", type=["tsv"])
 
-# Appliquer le style personnalisé
-set_bg_hack()
+if file is not None:
+    # Affichage du fichier TSV téléchargé
+    df = pd.read_csv(file, sep='\t')
+    st.write("Aperçu du fichier original :")
+    st.dataframe(df.head())
 
-# Créer des onglets pour les différentes options (fichier ou texte)
-tab1, tab2 = st.tabs(["Fichier CSV/TSV", "Commentaire texte"])
+    # Bouton pour déclencher l'analyse des sentiments
+    if st.button("Analyser les sentiments"):
+        # Envoyer le fichier à l'API pour analyse
+        response = requests.post(f"{api_url}/predict-sentiment/", files={"file": file.getvalue()})
 
-# Onglet pour l'upload de fichier
-with tab1:
-    st.header("Uploader un fichier CSV ou TSV")
-    file = st.file_uploader("Choisir un fichier CSV ou TSV", type=["csv", "tsv"])
+        if response.status_code == 200:
+            # Lire la réponse de l'API et afficher le fichier modifié
+            updated_tsv = StringIO(response.text)
+            df_updated = pd.read_csv(updated_tsv, sep='\t')
+            st.write("Fichier nettoyé et prédictions ajoutées :")
+            st.dataframe(df_updated.head())
 
-    if file is not None:
-        # Lecture et affichage du fichier uploadé
-        df = pd.read_csv(file, sep='\t')
-        st.write("Aperçu du fichier :")
-        st.dataframe(df.head())
+            st.write(f"Taille du fichier après nettoyage et prédictions : {df_updated.shape}")
 
-        # Bouton pour déclencher la prédiction
-        if st.button("Prédire à partir du fichier"):
-            response = requests.post(f"{api_url}/predict-csv/", files={"file": file.getvalue()})
-            if response.status_code == 200:
-                predictions = response.json()
-                st.write("Prédictions :")
-                st.write(predictions)
-            else:
-                st.error("Erreur lors de la prédiction")
-
-# Onglet pour entrer un commentaire texte
-with tab2:
-    st.header("Entrer un commentaire en anglais")
-
-    # Champ texte pour le commentaire
-    text = st.text_area("Entrez un commentaire (min. 50 caractères)", max_chars=500)
-
-    if st.button("Prédire à partir du texte"):
-        if len(text) < 50:
-            st.warning("Le commentaire doit contenir au moins 50 caractères.")
+            # Télécharger le fichier modifié
+            st.download_button(
+                label="Télécharger le fichier modifié",
+                data=response.text,
+                file_name="fichier_avec_sentiment.tsv",
+                mime="text/tsv"
+            )
         else:
-            # Requête à l'API pour prédire le sentiment à partir du texte
-            response = requests.post(f"{api_url}/predict-text/", json={"text": text})
-            if response.status_code == 200:
-                prediction = response.json()
-                if "error" in prediction:
-                    st.error(prediction["error"])
-                else:
-                    st.write(f"Prédiction : {prediction['prediction']}")
-            else:
-                st.error("Erreur lors de la prédiction")
+            st.error(f"Erreur lors de l'analyse des sentiments: {response.text}")

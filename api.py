@@ -1,8 +1,7 @@
-from fastapi import FastAPI, UploadFile, File
+from fastapi import FastAPI, UploadFile, File, Response
 import pandas as pd
 import joblib
-from preprocessing import nettoyage_automatisé  # On suppose que preprocessing gère déjà tout
-from langdetect import detect, LangDetectException
+from preprocessing import nettoyage_automatisé
 import io
 
 app = FastAPI()
@@ -10,42 +9,39 @@ app = FastAPI()
 # Charger le modèle
 model = joblib.load("bernoulli_model.joblib")
 
-def is_english(text: str) -> bool:
+@app.post("/predict-sentiment/")
+async def predict_sentiment(file: UploadFile = File(...)):
     try:
-        lang = detect(text)
-        return lang == 'en'
-    except LangDetectException:
-        return False
+        content = await file.read()
 
-# Via drag and drop
-@app.post("/predict-csv/")
-async def predict_csv(file: UploadFile = File(...)):
-    content = await file.read()
-    # Lire le fichier CSV/TSV
-    df = pd.read_csv(io.StringIO(content.decode('utf-8')), sep='\t')
+        # Lire le fichier TSV original
+        df = pd.read_csv(io.StringIO(content.decode('utf-8')), sep='\t')
+        print(f"Taille du fichier original : {df.shape}")
 
-    # Appliquer le preprocessing (aucune nouvelle colonne n'est créée ici)
-    df_cleaned = nettoyage_automatisé(df)
+        # Appliquer le prétraitement
+        df_cleaned = nettoyage_automatisé(df)
+        print(f"Taille après nettoyage : {df_cleaned.shape}")
 
-    # Faire la prédiction (le modèle sait déjà sur quelle colonne il doit travailler)
-    predictions = model.predict(df_cleaned)
+        # Vérifier que la colonne textuelle 'cleaned_text' est présente
+        if 'cleaned_text' not in df_cleaned.columns:
+            return {"error": "Colonne textuelle 'cleaned_text' manquante après le nettoyage."}
 
-    # Retourner les résultats avec les prédictions
-    return {"predictions": predictions.tolist()}
+        # Prédire le sentiment uniquement pour les lignes nettoyées
+        predictions = model.predict(df_cleaned['cleaned_text'])
+        print(f"Nombre de prédictions générées : {len(predictions)}")
 
-# Via phrase entrée à la mano
-@app.post("/predict-text/")
-async def predict_text(text: str):
-    if len(text) < 50:
-        return {"error": "Le commentaire doit contenir au moins 50 caractères"}
+        # Assurez-vous que les tailles correspondent
+        if len(predictions) != len(df_cleaned):
+            return {"error": f"Le nombre de prédictions ({len(predictions)}) ne correspond pas au nombre de lignes après nettoyage ({len(df_cleaned)})."}
 
-    if not is_english(text):
-        return {"error": "Le commentaire n'est pas en anglais. Veuillez entrer un commentaire en anglais."}
+        # Mapper les prédictions (0, 1 -> Négatif) et (3, 4 -> Positif)
+        sentiment_labels = {0: 'Négatif', 1: 'Négatif', 3: 'Positif', 4: 'Positif'}
+        df_cleaned['sentiment'] = [sentiment_labels.get(pred, 'Neutre') for pred in predictions]
 
-    # Appliquer le preprocessing à la phrase donnée
-    cleaned_text = nettoyage_automatisé(pd.DataFrame([text], columns=['Phrase']))
+        # Convertir le DataFrame nettoyé avec les prédictions en TSV
+        output = df_cleaned.to_csv(sep='\t', index=False)
 
-    # Faire la prédiction
-    prediction = model.predict(cleaned_text)[0]
-
-    return {"prediction": prediction}
+        # Renvoyer le fichier TSV nettoyé avec les prédictions
+        return Response(content=output, media_type="text/tsv")
+    except Exception as e:
+        return {"error": str(e)}
